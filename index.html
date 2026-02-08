@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Clock & Tides</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: white; text-align: center; padding: 50px; }
+        .clock-container { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+        .clock-card { background: #1e1e1e; padding: 20px; border-radius: 12px; min-width: 150px; border: 1px solid #333; }
+        h1 { color: #00d4ff; }
+        .time { font-size: 1.5rem; font-weight: bold; margin-top: 10px; }
+        .tide-placeholder { color: #888; margin-top: 10px; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h1>Global Time & Tide Tracker</h1>
+    <div class="clock-container">
+        <div class="clock-card">
+            <h3>Los Angeles</h3>
+            <div id="la-time" class="time"></div>
+            <div class="tide-placeholder">Tide Data Loading...</div>
+        </div>
+        <div class="clock-card">
+            <h3>London</h3>
+            <div id="london-time" class="time"></div>
+            <div class="tide-placeholder">Tide Data Loading...</div>
+        </div>
+        <div class="clock-card">
+            <h3>Tokyo</h3>
+            <div id="tokyo-time" class="time"></div>
+            <div class="tide-placeholder">Tide Data Loading...</div>
+        </div>
+    </div>
+
+    <script>
+        function updateClocks() {
+            const options = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+            
+            document.getElementById('la-time').innerHTML = new Intl.DateTimeFormat('en-US', { ...options, timeZone: 'America/Los_Angeles' }).format(new Date());
+            document.getElementById('london-time').innerHTML = new Intl.DateTimeFormat('en-US', { ...options, timeZone: 'Europe/London' }).format(new Date());
+            document.getElementById('tokyo-time').innerHTML = new Intl.DateTimeFormat('en-US', { ...options, timeZone: 'Asia/Tokyo' }).format(new Date());
+        }
+        setInterval(updateClocks, 1000);
+        updateClocks();
+    </script>
+</body>
+</html>
