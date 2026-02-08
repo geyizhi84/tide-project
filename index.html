@@ -53,49 +53,59 @@
     </div>
 
     <script>
-        // Config: Lat/Lon for coastal points near the cities
-        const cities = [
-            { id: 'la', lat: 33.77, lon: -118.19, tz: 'America/Los_Angeles' }, // Long Beach/LA
-            { id: 'london', lat: 51.50, lon: 0.05, tz: 'Europe/London' },      // Thames Estuary
-            { id: 'tokyo', lat: 35.65, lon: 139.79, tz: 'Asia/Tokyo' }       // Tokyo Bay
-        ];
+// Updated Config: coordinates moved further into the water for better data
+const cities = [
+    { id: 'la', lat: 33.70, lon: -118.30, tz: 'America/Los_Angeles' }, // Off San Pedro
+    { id: 'london', lat: 51.45, lon: 0.50, tz: 'Europe/London' },      // Thames Estuary
+    { id: 'tokyo', lat: 35.50, lon: 139.80, tz: 'Asia/Tokyo' }        // Central Tokyo Bay
+];
 
-        function updateClocks() {
-            const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
-            cities.forEach(city => {
-                const timeString = new Intl.DateTimeFormat('en-US', { ...timeOptions, timeZone: city.tz }).format(new Date());
-                document.getElementById(`${city.id}-time`).innerHTML = timeString;
-            });
+function updateClocks() {
+    const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+    cities.forEach(city => {
+        const el = document.getElementById(`${city.id}-time`);
+        if (el) {
+            el.innerHTML = new Intl.DateTimeFormat('en-US', { ...timeOptions, timeZone: city.tz }).format(new Date());
         }
+    });
+}
 
-        async function fetchTides() {
-            for (const city of cities) {
-                try {
-                    // Fetching 'sea_level' which accounts for tides
-                    const response = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${city.lat}&longitude=${city.lon}&hourly=sea_level&timezone=auto`);
-                    const data = await response.json();
-                    
-                    // Get current hour's sea level
-                    const now = new Date();
-                    const currentHour = now.getHours();
-                    const seaLevel = data.hourly.sea_level[currentHour];
-                    
-                    const unit = data.hourly_units.sea_level;
-                    document.getElementById(`${city.id}-tide`).innerHTML = `${seaLevel}${unit}`;
-                } catch (error) {
-                    console.error(`Error fetching tide for ${city.id}:`, error);
-                    document.getElementById(`${city.id}-tide`).innerHTML = "Data Offline";
-                }
+async function fetchTides() {
+    for (const city of cities) {
+        try {
+            // Switching to Wave Height as it's more reliable for coastal points
+            const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${city.lat}&longitude=${city.lon}&current=wave_height,wind_wave_height&timezone=auto`;
+            const response = await fetch(url);
+            
+            if (!response.ok) throw new Error('Network response was not ok');
+            
+            const data = await response.json();
+            const val = data.current.wave_height;
+            const unit = data.current_units.wave_height;
+
+            const tideEl = document.getElementById(`${city.id}-tide`);
+            if (tideEl) {
+                tideEl.innerHTML = `${val} ${unit}`;
+                tideEl.style.color = "#38bdf8"; // Reset to blue if it was red from error
+            }
+        } catch (error) {
+            console.error(`Error for ${city.id}:`, error);
+            const tideEl = document.getElementById(`${city.id}-tide`);
+            if (tideEl) {
+                tideEl.innerHTML = "Seeking Data...";
+                tideEl.style.color = "#ef4444"; // Turn red for visibility
             }
         }
+    }
+}
 
-        // Initialize
-        setInterval(updateClocks, 1000);
-        updateClocks();
-        fetchTides();
-        
-        // Refresh tide data every 30 minutes
-        setInterval(fetchTides, 1800000);
+// Initial calls
+setInterval(updateClocks, 1000);
+updateClocks();
+fetchTides();
+
+// Refresh marine data every 15 minutes
+setInterval(fetchTides, 900000);
     </script>
 </body>
 </html>
