@@ -3,111 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Marine Dashboard</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <title>Lunar Cycle Explorer</title>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; background: #0f172a; font-family: 'Segoe UI', sans-serif; }
-        #map { width: 100%; height: 100vh; }
-        
-        /* Smaller, cleaner permanent labels */
-        .leaflet-tooltip-pane .city-label {
-            background: rgba(30, 41, 59, 0.9);
-            border: 1px solid #38bdf8;
-            border-radius: 8px;
-            color: white;
-            padding: 8px;
-            font-size: 11px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-            min-width: 130px;
+        :root {
+            --bg-color: #0b0d17;
+            --card-bg: #161b22;
+            --text-color: #e6edf3;
+            --accent: #58a6ff;
         }
-        
-        .city-name { font-weight: bold; color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 4px; margin-bottom: 4px; display: block; text-transform: uppercase; font-size: 10px; }
-        .time-row { font-size: 14px; font-weight: bold; margin: 4px 0; }
-        .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 5px; }
-        .temp-val { font-weight: bold; }
-        .high { color: #f87171; }
-        .low { color: #60a5fa; }
-        .tide-row { margin-top: 5px; color: #fbbf24; font-size: 10px; font-weight: 600; }
-        
-        /* Remove default Leaflet tooltip arrow */
-        .leaflet-tooltip-left:before, .leaflet-tooltip-right:before { display: none; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .controls {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        select {
+            padding: 10px;
+            border-radius: 5px;
+            background: var(--card-bg);
+            color: white;
+            border: 1px solid #30363d;
+            font-size: 1rem;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 15px;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        .day-card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #30363d;
+            transition: transform 0.2s;
+        }
+
+        .day-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent);
+        }
+
+        .date-label {
+            font-size: 0.8rem;
+            color: #8b949e;
+            margin-bottom: 8px;
+        }
+
+        .moon-emoji {
+            font-size: 2.5rem;
+            margin: 10px 0;
+            display: block;
+        }
+
+        .phase-name {
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        .today {
+            border: 2px solid var(--accent);
+            box-shadow: 0 0 15px rgba(88, 166, 255, 0.3);
+        }
     </style>
 </head>
 <body>
 
-    <div id="map"></div>
+    <h1>Lunar Phase Calendar</h1>
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <div class="controls">
+        <label for="city-select">Select City: </label>
+        <select id="city-select">
+            <option value="northern" selected>Shanghai (Northern Hemisphere)</option>
+            <option value="southern">Sydney (Southern Hemisphere)</option>
+            <option value="northern">Los Angeles (Northern Hemisphere)</option>
+            <option value="northern">London (Northern Hemisphere)</option>
+            <option value="southern">São Paulo (Southern Hemisphere)</option>
+        </select>
+        <p id="location-note">Showing phases as seen from the Northern Hemisphere.</p>
+    </div>
+
+    <div class="calendar-grid" id="calendar"></div>
+
     <script>
-        const map = L.map('map', {
-            center: [15, 10],
-            zoom: 2,
-            zoomControl: false // Cleaner look
-        });
+        const LUNAR_MONTH = 29.530588853;
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap'
-        }).addTo(map);
-
-        const cities = [
-            { name: "Shanghai", lat: 31.23, lon: 121.47, tz: "Asia/Shanghai", tideOffset: 0 },
-            { name: "London", lat: 51.50, lon: -0.12, tz: "Europe/London", tideOffset: 1.5 },
-            { name: "New York", lat: 40.71, lon: -74.00, tz: "America/New_York", tideOffset: -4 },
-            { name: "Sydney", lat: -33.86, lon: 151.20, tz: "Australia/Sydney", tideOffset: 10 }
-        ];
-
-        async function updateDashboard() {
-            // Remove old layers to refresh data
-            map.eachLayer((layer) => {
-                if (layer instanceof L.Marker) map.removeLayer(layer);
-            });
-
-            for (const city of cities) {
-                try {
-                    // 1. Fetch Weather
-                    const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=2`);
-                    const wData = await wRes.json();
-                    const max = wData.daily.temperature_2m_max[1];
-                    const min = wData.daily.temperature_2m_min[1];
-
-                    // 2. Calculate local time
-                    const now = new Date();
-                    const timeStr = new Intl.DateTimeFormat('en-US', {
-                        hour: '2-digit', minute: '2-digit', hour12: true, timeZone: city.tz
-                    }).format(now);
-
-                    // 3. Est. High Tide (Simplified for Dashboard)
-                    // High tides cycle approx every 12h 25m.
-                    const highTide = "12:45 PM"; // Replace with dynamic API call if using WorldTides later
-
-                    const content = `
-                        <div class="city-label">
-                            <span class="city-name">${city.name}</span>
-                            <div class="time-row">${timeStr}</div>
-                            <div class="data-grid">
-                                <div><span class="tide-label">Max</span><br><span class="temp-val high">${max}°C</span></div>
-                                <div><span class="tide-label">Min</span><br><span class="temp-val low">${min}°C</span></div>
-                            </div>
-                            <div class="tide-row">🌊 High Tide: ${highTide}</div>
-                        </div>
-                    `;
-
-                    L.marker([city.lat, city.lon], { opacity: 0 }) // Hidden marker
-                        .addTo(map)
-                        .bindTooltip(content, { 
-                            permanent: true, 
-                            direction: 'center', 
-                            className: 'custom-tooltip' 
-                        }).openTooltip();
-
-                } catch (e) {
-                    console.log("Error for " + city.name);
-                }
-            }
+        // Simplified Julian Date calculation
+        function getJulianDate(date) {
+            return (date.getTime() / 86400000) - (date.getTimezoneOffset() / 1440) + 2440587.5;
         }
 
-        updateDashboard();
-        setInterval(updateDashboard, 60000); // Refresh every minute
+        function getMoonPhase(date, hemisphere) {
+            // Reference New Moon: Jan 6, 2000
+            const jd = getJulianDate(date);
+            const daysSinceNew = (jd - 2451550.1) % LUNAR_MONTH;
+            const age = daysSinceNew < 0 ? daysSinceNew + LUNAR_MONTH : daysSinceNew;
+            
+            let phase, emoji;
+
+            if (age < 1.84566) { phase = "New Moon"; emoji = "🌑"; }
+            else if (age < 5.53699) { phase = "Waxing Crescent"; emoji = "🌒"; }
+            else if (age < 9.22831) { phase = "First Quarter"; emoji = "🌓"; }
+            else if (age < 12.91963) { phase = "Waxing Gibbous"; emoji = "🌔"; }
+            else if (age < 16.61096) { phase = "Full Moon"; emoji = "🌕"; }
+            else if (age < 20.30228) { phase = "Waning Gibbous"; emoji = "🌖"; }
+            else if (age < 23.99361) { phase = "Last Quarter"; emoji = "🌗"; }
+            else if (age < 27.68493) { phase = "Waning Crescent"; emoji = "🌘"; }
+            else { phase = "New Moon"; emoji = "🌑"; }
+
+            // Flip emojis for Southern Hemisphere
+            if (hemisphere === "southern") {
+                const southernEmojis = {
+                    "🌒": "🌘", "🌓": "🌗", "🌔": "🌖",
+                    "🌖": "🌔", "🌗": "🌓", "🌘": "🌒"
+                };
+                emoji = southernEmojis[emoji] || emoji;
+            }
+
+            return { phase, emoji };
+        }
+
+        function renderCalendar() {
+            const calendarEl = document.getElementById('calendar');
+            const hemisphere = document.getElementById('city-select').value;
+            calendarEl.innerHTML = '';
+            
+            const today = new Date();
+
+            for (let i = 0; i < 28; i++) {
+                const currentDate = new Date();
+                currentDate.setDate(today.getDate() + i);
+                
+                const { phase, emoji } = getMoonPhase(currentDate, hemisphere);
+                
+                const card = document.createElement('div');
+                card.className = `day-card ${i === 0 ? 'today' : ''}`;
+                
+                const dateString = currentDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                const dayName = i === 0 ? "Today" : currentDate.toLocaleDateString(undefined, { weekday: 'short' });
+
+                card.innerHTML = `
+                    <div class="date-label">${dayName}, ${dateString}</div>
+                    <span class="moon-emoji">${emoji}</span>
+                    <div class="phase-name">${phase}</div>
+                `;
+                calendarEl.appendChild(card);
+            }
+
+            document.getElementById('location-note').innerText = 
+                `Showing phases as seen from the ${hemisphere.charAt(0).toUpperCase() + hemisphere.slice(1)} Hemisphere.`;
+        }
+
+        document.getElementById('city-select').addEventListener('change', renderCalendar);
+        
+        // Initial build
+        renderCalendar();
     </script>
 </body>
 </html>
